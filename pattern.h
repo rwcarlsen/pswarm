@@ -2,18 +2,15 @@
 
 #define Pattern_included
 
-
 /* A vector in a linked list of vectors */
 struct poll_vector {
-	double *vector;    /* vector */
-	struct poll_vector *next;
+  double *vector; /* vector */
+  struct poll_vector *next;
 };
 
-
-
-
-void pollstep(int n, int lincons, int pi, void (*objf)(), double *lb, double *ub,
-	      double *A, double *b, struct poll_vector **last_sucess);
+void pollstep(int n, int lincons, int pi, void (*objf)(), double *lb,
+              double *ub, double *A, double *b,
+              struct poll_vector **last_sucess);
 void init_D(int);
 void print_D(int);
 void print_TC(int);

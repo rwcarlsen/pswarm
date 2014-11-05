@@ -29,6 +29,14 @@ extern struct Stats stats;
 #define CONS 5        /* a linear problem with 5 linear constraints */
 double obj_coef[DIM]; /* objective function coefficients */
 
+int n_dims() {
+  return DIM;
+}
+
+int n_cons() {
+  return CONS;
+}
+
 /**********************************************/
 /*                                            */
 /* End of user defined global variables       */

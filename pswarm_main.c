@@ -62,11 +62,13 @@ int main(int argc, char **argv) {
   int exit_code, i;
   double *sol = NULL;
   double *f = NULL;
-  double *lb, *ub;
-  double *A, *b; /* linear constraints defined in a Fortran way */
-  int lincons;   /* number of linear constraints */
+  double *lb = NULL;
+  double *ub = NULL;
+  double *A = NULL;
+  double *b = NULL; /* linear constraints defined in a Fortran way */
+  int lincons = n_cons();   /* number of linear constraints */
 
-  int n;
+  int n = n_dims();
   double *X0;
 
   if (!setjmp(Jb)) {
@@ -110,20 +112,10 @@ int main(int argc, char **argv) {
         }*/
 
     user_init();
-
-    if (1) {
-      //      load_cache_file(n, 4);
-
-      exit_code = PSwarm(n, &objfun, lb, ub, lincons, A, b, &sol, f, X0);
-
-      //      save_cache_file(n, 4);
-
-      if (opt.IPrint >= 0) printf("\n%s\n", exit_codes[exit_code].msg);
-
-    } else { /* I am an objective function process */
-
-      exit_code = 0; /* never executed if not MPI */
-    }
+    //      load_cache_file(n, 4);
+    exit_code = PSwarm(n, &objfun, lb, ub, lincons, A, b, &sol, f, X0);
+    //      save_cache_file(n, 4);
+    if (opt.IPrint >= 0) printf("\n%s\n", exit_codes[exit_code].msg);
   }
 
   if (lb) free(lb);

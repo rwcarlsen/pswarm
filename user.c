@@ -1,5 +1,4 @@
 
-#ifndef AMPL
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
@@ -215,6 +214,3 @@ void user_init()
 /*                                                     */
 /*******************************************************/
 
-
-
-#endif /* AMPL */

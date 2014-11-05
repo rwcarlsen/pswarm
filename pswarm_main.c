@@ -56,8 +56,6 @@ extern int read_cesam_cache(int n, double *x, double *age,
 extern void write_cesam_cache(int n, double *x, double *age,
                   double *teff, double *lum, double *r);
 
-#ifndef AMPL
-
 extern void set_problem(double *x, double *lb, double *ub, double *A, double *b);
 extern void set_problem_dimension(int *n, int *lincons);
 
@@ -71,147 +69,10 @@ extern void user_init();
 
 #endif
 
-#endif
-
-
-#ifdef AMPL
-
-static double objsign;
-static fint NERROR = -1;
-#define asl cur_ASL
-
-char pswarm_version[]="PSwarm v1.4";
-
-/* This struct member names must be in alphabetic order,
-   for binary search */
-
-keyword keywds[] = {
-  KW("cognitial"   , pswarm_opt_d, (Char*)&opt.mu,
-     "Cognitial parameter"),
-  KW("ddelta"   , pswarm_opt_d, (Char*)&opt.ddelta,
-     "Deacresing delta factor (<1)"),
-  KW("delta"   , pswarm_opt_d, (Char*)&opt.delta,
-     "Initial delta"),
-  KW("fweight"   , pswarm_opt_d, (Char*)&opt.fweight,
-     "Final weight (inercial parameter)"),
-  KW("idelta"   , pswarm_opt_d, (Char*)&opt.idelta,
-     "Increase delta factor (>1)"),
-  KW("iprint"   , pswarm_opt_i, (Char*)&opt.IPrint,
-     "Print for every iprint iterations (<0 no print, =0 print final; >0 print)"),
-  KW("iweight"   , pswarm_opt_d, (Char*)&opt.iweight,
-     "Initial weight (inercial parameter)"),
-  KW("maxf", pswarm_opt_i, (Char*)&opt.maxf,
-     "Maximum number of function evaluations times problem dimension"),
-  KW("maxit", pswarm_opt_i, (Char*)&opt.maxiter,
-     "Maximum number of iterations times problem dimension"),
-  KW("size"        , pswarm_opt_i, (Char*)&opt.s,
-     "Swarm size"),
-  KW("social"        , pswarm_opt_d, (Char*)&opt.nu,
-     "Social parameter"),
-  KW("tol"        , pswarm_opt_d, (Char*)&opt.tol,
-     "Stopping tolerance parameter"),
-  KW("vectorized"    , pswarm_opt_i, (Char*)&opt.vectorized,
-     "Vectorized call to the objective function"),
-};
-
-
-struct Option_Info Oinfo = { "pswarm", "PSwarm", "pswarm_options",
-                 keywds, nkeywds, 1, pswarm_version, 0, NULL};
-
-
-
-
-/**********************************************
-Set options. String type
-**********************************************/
-char *pswarm_opt_s(Option_Info *oi, keyword *kw, char *value)
-{
-  char *s;
-
-
-  /* never echo options */
-  oi->option_echo &= ~ASL_OI_echo; 
-
-
-  if(!strncmp("method", kw->name, 6)){
-    s=value;
-    while(*s!=' ' && *s!=0)
-      s++;
-    if(s<=value)
-      return value;
-
-    if(!strncmp("disc_hett", value, 9)){
-      *(int *)kw->info=0; /*DISC_METHOD;*/
-      printf("Discretization method selected Hettich version\n");
-      return s;
-    }
-
-    /* unknown method */
-    return value;
-  }
-
-
-  /* not implemented option */
-  return value;
-}
-
-
-/**********************************************
-Set options. Integer type
-**********************************************/
-char *pswarm_opt_i(Option_Info *oi, keyword *kw, char *value)
-{
-  long optval;
-  char *s;
-
-  /* never echo options */
-  oi->option_echo &= ~ASL_OI_echo;
-
-  optval=strtol(value, &s, 10);
-  if(s > value){
-    /* existing integer number */
-    *(int *)kw->info=(int)optval;
-    printf("\nDefault option %s=%d changed\n", kw->name, *(int *)kw->info);
-    return s;
-  }
-
-return value;
-}
-
-
-/**********************************************
-Set options. Double type
-**********************************************/
-char *pswarm_opt_d(Option_Info *oi, keyword *kw, char *value)
-{
-  double optval;
-  char *s;
-
-  /* never echo options */
-  oi->option_echo &= ~ASL_OI_echo;  
-
-  optval=strtod(value, &s);
-
-  if(s > value){
-    /* existing double number */
-    *(double *)kw->info=optval;
-    printf("\nDefault option %s=%.6f changed\n", kw->name, *(double *)kw->info);
-    return s;
-  }
-
-return value;
-}
-
-#endif /* AMPL */
-
-
 static jmp_buf Jb;
 
 void catchfpe(int n)
 {
-#ifdef AMPL
-  report_where(asl);
-#endif /* AMPL */
   printf("\nFloating point error.\n");
   fflush(stdout);
   longjmp(Jb,1);
@@ -235,138 +96,23 @@ int main(int argc, char **argv)
   /*char hostname[256]; */
 #endif
 
-#ifdef AMPL
-  char *stub;
-  double *lbt, *ubt, *tmp;
-  ASL *asl;
-  FILE *nl;
-  fint m, n, no, nz, mxr, mxc;
-  cgrad *cg;
-  int tmplincons;
-#else
   int n;
   double *X0;
-#endif
-  
-
-#ifdef AMPL
-  asl = ASL_alloc(ASL_read_fg);
-  
-  stub = getstops(argv, &Oinfo);
-  
-  nl=jac_dim_ASL(asl, stub, &m, &n, &no, &nz, &mxr, &mxc, (fint)strlen(stub));
-  if (!nl){
-    printf("Can't read problem\n");
-    exit(1);
-  }
-
-  want_deriv = 0;
-  want_derivs = 0; /* no derivs */
-  want_xpi0=1;    /* initial guess, if available */
-  
-  
-  fg_read_ASL(asl, nl, 0);
-  
-  if(n_obj<1){
-    printf("At least one objective is requested\n");
-    exit(1);
-  }
-
-  if(n_obj>1){
-    printf("Current implementation only supports one objective function\n");
-    printf("Considering first objective\n");
-  }
-
-  if(nlc){
-    printf("\nIgnoring %d nonlinear constraint%c\n",
-       nlc, nlc==1? ' ':'s');
-  }
-  
-  dense_j();
-  
-  objsign = objtype[0] ? -1. : 1.; // default is minimization
-  /* objsign =  1 minimization problem */
-  /* objsign = -1 maximization problem */
-
-  /* Deal with linear constraints */
-  if(n_con-nlc>0){
-    /* Ax<=b constraint type */
-    /* account for how many */
-    lincons=0;
-    for(i=nlc;i<n_con;i++){
-      if(LUrhs[2*i]>-Inf)
-		  lincons++;
-      if(LUrhs[2*i+1]<Inf)
-		  lincons++;
-    }
-
-    A = pswarm_malloc(lincons*n_var*sizeof(double));
-    b = pswarm_malloc(lincons*sizeof(double));
-
-    memset(A, 0, (lincons)*n_var*sizeof(double));
-    memset(b, 0, (lincons)*sizeof(double));
-
-
-    tmplincons=0;
-    for(i=nlc;i<n_con;i++){
-      if(LUrhs[2*i]>-Inf){
-    b[tmplincons]=-LUrhs[2*i];
-    for(cg=Cgrad[i];cg;cg=cg->next)
-      A[tmplincons+lincons*cg->varno]=-cg->coef;    
-    tmplincons++;
-      }
-      if(LUrhs[2*i+1]<Inf){
-    b[tmplincons]=LUrhs[2*i+1];
-    for(cg=Cgrad[i];cg;cg=cg->next)
-      A[tmplincons+lincons*cg->varno]=cg->coef;
-    tmplincons++;
-      }
-
-    }
-
-  } else {
-    lincons=0;
-    A=NULL;
-    b=NULL;
-  }
-  
-  //opt.s = 5*n;
-
-  //printf("**** Pop size = %d ****\n", opt.s);
-#endif /* AMPL */
   
   if (!setjmp(Jb)){
     signal(SIGFPE, catchfpe);
 
-#ifndef AMPL
-    set_problem_dimension(&n,&lincons);
-#endif
-    
     /* lower and upper bounds on variables */
-
-#ifdef AMPL
-    lbt=
-#endif
-      lb=pswarm_malloc(n*sizeof(double));    
+    lb=pswarm_malloc(n*sizeof(double));    
 
 
-#ifdef AMPL
-    ubt=
-#endif
-      ub=pswarm_malloc(n*sizeof(double));
+    ub=pswarm_malloc(n*sizeof(double));
     
     if(!lb || !ub){
       printf("Unable to allocate memory for variable bounds\n");
       exit(1);
     }
 
-#ifdef AMPL
-    tmp=LUv;
-    for(i=0;i<n;i++){
-      *lbt++=*tmp++;
-      *ubt++=*tmp++;
-    }
-#else
     X0=pswarm_malloc(n*sizeof(double));
     if(!X0){
       printf("Unable to allocate memory for initial guess\n");
@@ -385,7 +131,6 @@ int main(int argc, char **argv)
 
     set_problem(X0, lb, ub, A, b);
 
-#endif /*AMPL*/
 
     /* check for finite bound on the variables */
 /*    for(i=0;i<n;i++){
@@ -397,7 +142,6 @@ int main(int argc, char **argv)
 
     
 
-#ifndef AMPL    
 #ifdef MPI
     MPI_Init(&argc,&argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &MPI_myrank);
@@ -410,9 +154,6 @@ int main(int argc, char **argv)
     user_init();
 
 #endif
-#endif /* AMPL */
-
-
 
 #ifdef MPE
     MPE_Init_log();
@@ -454,9 +195,6 @@ int main(int argc, char **argv)
       
       //      save_cache_file(n, 4);
       
-#ifdef AMPL
-      write_sol("Exiting PSwarm", sol, NULL, &Oinfo);
-#endif
 	  if(opt.IPrint>=0)
         printf("\n%s\n", exit_codes[exit_code].msg);
 
@@ -550,19 +288,4 @@ void MPI_objfun_deamon(int n, double *lb, double *ub, int MPI_myrank)
 }
 
 #endif
-
-
-#ifdef AMPL
-void objfun(int n, int m, double *x, double *lb, double *ub, double *fx)
-{
-  int j;
-
-  for(j=0;j<m;j++){
-	  fx[j]=objval(0, &x[j*n], &NERROR);
-  }
-  
-
-}
-
-#endif /* AMPL */
 

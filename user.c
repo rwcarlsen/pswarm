@@ -174,23 +174,6 @@ void set_problem(double *x, double *lb, double *ub, double *A, double *b)
 /*                                                     */
 /*******************************************************/
 
-#ifdef MPI
-
-
-void user_init_MPI(int MPI_myrank)
-{
-
-  /* use this function if some global data must be initialized */
-
-  obj_coef[0]=-10.0;
-  obj_coef[1]=-15.0;
-  obj_coef[2]=-22.0;
-  obj_coef[3]=-17.0;
-  obj_coef[4]=0.0;
-  obj_coef[5]=0.0;
-  
-}
-#else
 void user_init()
 {
 
@@ -205,7 +188,6 @@ void user_init()
 
   
 }
-#endif
 
 
 /*******************************************************/

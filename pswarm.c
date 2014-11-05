@@ -4,22 +4,8 @@
 #include<math.h>
 #include<memory.h>
 
-#ifdef MPI
-#include "mpi.h"
-#endif
-#ifdef MPE
-#include "mpe.h"
-#endif
 #include "pattern.h"
 #include "pswarm.h"
-
-
-#ifdef MPE
-/* for MPE */
-extern int ComputeID_begin, ComputeID_end, SendID_begin, SendID_end, RecvID_begin,
-RecvID_end;
-#endif
-
 
 #ifdef LINEAR
 extern void dgemv_();
@@ -120,21 +106,11 @@ int PSwarm(int n, void (*objf)(), double *lb, double *ub, int lincons, double *A
 
 	static struct poll_vector *last_success=NULL;
 
-#ifdef MPI
-	MPI_Status status;
-	int received, particle, MPI_numprocs, action, sent;
-#endif
-
 	/* Initial time */
 	time(&tt);
 	buff=ctime(&tt);
 	if(opt.IPrint>=0)
 		printf("\nInitial time: %s\n",buff);
-
-
-#ifdef MPI
-	MPI_Comm_size(MPI_COMM_WORLD, &MPI_numprocs);
-#endif
 
 
 #if SYS_RANDOM==1
@@ -311,106 +287,6 @@ int PSwarm(int n, void (*objf)(), double *lb, double *ub, int lincons, double *A
 
 			success=0; /* controls if gbest was updated with success */
 
-#ifdef MPI    
-			/* send jobs for computing objective functions */
-			/*printf("Sending jobs in pswarm.c\n"); */
-
-			i=0;
-			action=2; /* compute objective value */
-			received=0;
-			sent=0;
-			while(!pop.active[i])i++; /* first active particle */
-#ifdef MPE
-			MPE_Log_event(SendID_begin, 0, NULL);
-#endif
-			for(process=1;process<MPI_numprocs && i<opt.s;){ /* increase process on success */
-
-				if(feasible_p(n, &pop.x[i*n], lincons, A, b, lb, ub)){
-					MPI_Send(&action, 1, MPI_INT, process, 99, MPI_COMM_WORLD);
-					MPI_Send(&i, 1, MPI_INT, process, 99, MPI_COMM_WORLD);
-					MPI_Send(&pop.x[i*n], n, MPI_DOUBLE, process, 99, MPI_COMM_WORLD);
-					process++;
-					sent++;
-				}
-
-				i++;
-				while(!pop.active[i])i++; /* next active particle */
-			}
-#ifdef MPE
-			MPE_Log_event(SendID_end, 0, NULL);
-#endif
-
-
-			while(i<opt.s){ /* we have more particle to assign */
-				/* receive one objective function */
-#ifdef MPE
-				MPE_Log_event(RecvID_begin, 0, NULL);
-#endif
-				MPI_Recv(&particle, 1, MPI_INT, MPI_ANY_SOURCE, 99, MPI_COMM_WORLD, &status);
-				process=status.MPI_SOURCE;
-				MPI_Recv(&pop.fx[particle], 1, MPI_DOUBLE, process, 99, MPI_COMM_WORLD, &status);
-#ifdef MPE
-				MPE_Log_event(RecvID_end, 0, NULL);
-#endif
-				received++;
-				stats.objfunctions++;
-				/* Send another one to the same processor */
-
-
-
-				/* find next feasible particle */
-				while(i<opt.s){
-
-					if(feasible_p(n, &pop.x[i*n], lincons, A, b, lb, ub)){
-						break;
-					}
-
-					i++;
-					while(!pop.active[i])i++; /* next active particle */
-				}
-
-				if(i>=opt.s)
-					break; /* no more feasible particles */
-
-#ifdef MPE
-				MPE_Log_event(SendID_begin, 0, NULL);
-#endif
-				MPI_Send(&action, 1, MPI_INT, process, 99, MPI_COMM_WORLD);
-				MPI_Send(&i, 1, MPI_INT, process, 99, MPI_COMM_WORLD);
-				MPI_Send(&pop.x[i*n], n, MPI_DOUBLE, process, 99, MPI_COMM_WORLD);
-				i++;
-				sent++;
-#ifdef MPE
-				MPE_Log_event(SendID_end, 0, NULL);
-#endif
-
-
-
-				while(!pop.active[i])i++; /* next active particle */
-			}
-
-#ifdef MPE
-			MPE_Log_event(RecvID_begin, 0, NULL);
-#endif
-			while(received<sent){ /* wait for the remaining ones */
-				MPI_Recv(&particle, 1, MPI_INT, MPI_ANY_SOURCE, 99, MPI_COMM_WORLD, &status);
-				process=status.MPI_SOURCE;
-				MPI_Recv(&pop.fx[particle], 1, MPI_DOUBLE, status.MPI_SOURCE, 99, MPI_COMM_WORLD, &status);
-				received++;
-				stats.objfunctions++;
-			}
-#ifdef MPE
-			MPE_Log_event(RecvID_end, 0, NULL);
-
-			MPE_Log_event(ComputeID_begin, 0, NULL);
-#endif
-
-			/*printf("Done sending jobs in pswarm.c\n");*/
-
-			/* All jobs sent */
-#else /* MPI */
-			/* no MPI, so just compute all the objective function values */
-
 if(opt.vectorized){ /* call objf once with all the points */
 
 	vectorx=(double *)pswarm_malloc(opt.s*n*sizeof(double)); /* we could avoid to wast memory on points not active */
@@ -448,8 +324,6 @@ if(opt.vectorized){ /* call objf once with all the points */
 			}
 }
 
-#endif
-
 			process=0;
 			for(i=0;i<opt.s;i++){
 				if(pop.active[i]){
@@ -473,15 +347,8 @@ if(opt.vectorized){ /* call objf once with all the points */
 			if(!success){ /* no success for the gbest particle in one generation, so performe a poll step */
 				if(pop.delta>=opt.tol){
 
-#ifdef MPE
-					MPE_Log_event(ComputeID_end, 0, NULL); /* we log in pattern.c */
-#endif
 					/* performe a poll step, update y and delta */
 					pollstep(n, lincons, gbest, objf, lb, ub, A, b, &last_success);
-
-#ifdef MPE
-					MPE_Log_event(ComputeID_begin, 0, NULL);
-#endif
 
 					stats.pollsteps++;
 					iterunsuc=0;
@@ -626,11 +493,6 @@ if(opt.vectorized){ /* call objf once with all the points */
 			//    printf("Maximum velocity norm: %f\n", maxnormv);
 
 			//printf("%d;%.20f\n",stats.objfunctions,pop.fy[gbest]);
-
-#ifdef MPE
-			MPE_Log_event(ComputeID_end, 0, NULL);
-#endif
-
 
 #ifdef LINEAR
 			//  check_feasible_pop(n, opt.s, lincons, &pop, lb, ub, A, b);

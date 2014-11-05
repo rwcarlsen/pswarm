@@ -4,21 +4,8 @@
 #include<math.h>
 #include<memory.h>
 
-#ifdef MPI
-#include "mpi.h"
-#endif
-#ifdef MPE
-#include "mpe.h"
-#endif
 #include "pattern.h"
 #include "pswarm.h"
-
-#ifdef MPE
-/* for MPE */
-extern int ComputeID_begin, ComputeID_end, SendID_begin, SendID_end, RecvID_begin,
-  RecvID_end;
-#endif
-
 
 extern struct swarm pop;
 extern struct Options opt;
@@ -63,15 +50,6 @@ void pollstep(int n, int lincons, int pi, void (*objf)(), double *lb, double *ub
 
   double *tmpm;
 #endif
-
-
-#ifdef MPI
-  MPI_Status status;
-  int process, MPI_numprocs, action, received, directions;
-  struct poll_vector **vectors;
-#endif
-
-
 
 #ifdef LINEAR /* get tangent cone for active constraints */
 
@@ -133,120 +111,6 @@ void pollstep(int n, int lincons, int pi, void (*objf)(), double *lb, double *ub
 /*     printf("*********************************************\n"); */
 /*   } */
 
-
-#ifdef MPI
-  MPI_Comm_size(MPI_COMM_WORLD, &MPI_numprocs);
-
-  vectors=pswarm_malloc(MPI_numprocs*sizeof(struct poll_vector *));
-
-  if(!vectors){
-    printf("Unable to alocate memory in pattern.c\n");
-    exit(1);
-  }
-
-  printf("Sending jobs in pattern.c\n");
-
-#ifdef MPE
-  MPE_Log_event(SendID_begin, 0, NULL);
-#endif
-
-  directions=0; /* how many poll_point do we have ? */
-  action=1;
-  tmp=PVectors;
-  for(process=1;process<MPI_numprocs && tmp;){ /* don't forget to increment process if successful */
-    for(i=0;i<n;i++)
-      poll_point[i]=pop.y[pi*n+i]+pop.delta*tmp->vector[i];
-
-    if(feasible_p(n, poll_point, lincons, A, b, lb, ub)){
-      MPI_Send(&action, 1, MPI_INT, process, 99, MPI_COMM_WORLD);
-      MPI_Send(poll_point, n, MPI_DOUBLE, process, 99, MPI_COMM_WORLD);
-      vectors[process]=tmp; /* keep direction that each process has */
-      directions++;
-      process++;
-    }
-
-    tmp=tmp->next;
-
-  }
-
-#ifdef MPE
-  MPE_Log_event(SendID_end, 0, NULL);
-#endif
-
-  received=0;
-  minvector=NULL;
-  minfx=Inf;
-
-  while(tmp){ /* we have more trial points to assign */
-#ifdef MPE
-    MPE_Log_event(RecvID_begin, 0, NULL);
-#endif
-    MPI_Recv(&fx, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 99, MPI_COMM_WORLD, &status);
-    process=status.MPI_SOURCE;
-
-    received++;
-    stats.objfunctions++;
-    
-#ifdef MPE
-    MPE_Log_event(RecvID_end, 0, NULL);
-#endif
-    
-    if(minfx>fx){
-      minfx=fx;
-      minvector=vectors[process];
-      if(pop.fy[pi]>minfx); /* we can break here in an oportunistic version */
-    break;
-    }
-
-    while(tmp){ /* search for another feasible poll_point */
-      for(i=0;i<n;i++)
-    poll_point[i]=pop.y[pi*n+i]+pop.delta*tmp->vector[i];
-
-      if(feasible_p(n, poll_point, lincons, A, b, lb, ub)){
-    /* Sent another one to the same processor */
-#ifdef MPE
-    MPE_Log_event(SendID_begin, 0, NULL);
-#endif
-    MPI_Send(&action, 1, MPI_INT, process, 99, MPI_COMM_WORLD);
-    
-    MPI_Send(poll_point, n, MPI_DOUBLE, process, 99, MPI_COMM_WORLD);
-    vectors[process]=tmp;
-#ifdef MPE
-    MPE_Log_event(SendID_end, 0, NULL);
-#endif
-    directions++;
-    break; /* break internal cycle */
-      }
-      tmp=tmp->next;
-    }
-
-    if(tmp)
-      tmp=tmp->next;
-  }
-
-#ifdef MPE
-  MPE_Log_event(RecvID_begin, 0, NULL);
-#endif
-  while(received<directions){ /* wait for the remaining ones */
-    MPI_Recv(&fx, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 99, MPI_COMM_WORLD, &status);
-    process=status.MPI_SOURCE;
-    received++;
-    stats.objfunctions++;
-    if(minfx>fx){
-      minfx=fx;
-      minvector=vectors[process]; /* don't break. I have to receive all jobs assigned */
-    }
-  }
-#ifdef MPE
-  MPE_Log_event(RecvID_end, 0, NULL);
-  
-  MPE_Log_event(ComputeID_begin, 0, NULL);
-#endif
-  
-  printf("Done reading jobs in pattern.c\n");
-  
-  
-#else /* MPI */
 
 if(opt.vectorized){
 
@@ -327,8 +191,6 @@ if(opt.vectorized){
 		tmp=tmp->next;
 	}
 }
-#endif
-
   
   if(pop.fy[pi]>minfx){ /* a successful poll point */
     stats.sucpollsteps++;

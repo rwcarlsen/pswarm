@@ -87,7 +87,7 @@ PYHDRS = ./pswarm_py.h
 
 
 # Default compilation for the parallel version with linear constraints and the PSwarm library
-all: parallel_linear lib_linear
+all: serial_linear lib_linear
 
 # Parallel version with linear constraints
 parallel_linear: $(SRC) $(SRC_LINEAR) $(HDRS)

@@ -66,7 +66,7 @@ struct Options opt = {
     10,      /* bound limit */
     1.0e-5,  /* tolerance for stopping criteria */
     Inf,     /* initial delta -- is computed or user provided */
-    5.0,     /* factor for initial delta */
+    4.0,     /* factor for initial delta */
     2,       /* increase delta by a factor of */
     0.5,     /* decrease delta by a factor of */
     N2,      /* type of basis on pattern search */
